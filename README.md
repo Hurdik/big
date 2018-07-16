@@ -1,4 +1,4 @@
 # Big File Format
 
-See [Documentation](./doc/git.pdf) for more info.
+See [Documentation](./doc/big.pdf) for more info.
 
