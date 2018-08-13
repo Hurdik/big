@@ -1,23 +1,66 @@
+#include <iterator>
+#include <iostream>
 #include <fstream>
 
 #include "big_core.h"
 #include "big_consts.h"
 
-void BigCore::writeChunk(std::ofstream &file, unsigned int id, unsigned int length, const char* data)
+BigCore::BigCore()
+	:
+_numberOfImages(0),
+_numberOfTiles(0),
+_imageHeight(0),
+_imageWidth(0),
+_numberOfImagePlanes(0),
+_dataType(0),
+_data(0),
+_dataLength(0)
 {
-	file.write((char*)&id, CHUNK_LENGTH);
-	file.write((char*)&length, CHUNK_LENGTH);
-
-	// this is for fixating length to be multiple of 8
-	if (length % 8 > 0)
-		length = length + 8 - (length % 8);
-
-	file.write(data, length);
 }
 
-unsigned int BigCore::dataSize()
+#ifdef DEBUG
+BigCore::BigCore(uint64_t numberOfImages, uint64_t numberOfTiles, uint64_t imageHeight, uint64_t imageWidth, 
+	             uint64_t numberOfPlanes, uint64_t dataOrder[5], uint64_t dataType, size_t dataLength, char * data)
+:
+_numberOfImages(numberOfImages),
+_numberOfTiles(numberOfTiles),
+_imageHeight(imageHeight),
+_imageWidth(imageWidth),
+_numberOfImagePlanes(numberOfPlanes),
+_dataType(dataType),
+_dataLength(dataLength)
 {
-	unsigned int size = this->_imageWidth * this->_imageHeight * this->_numberOfImagePlanes * this->_numberOfImages;
+	std::copy(dataOrder, dataOrder + 5, this->_dataOrder);
+
+	this->_data = new char[this->_dataLength];
+	// std::copy(data, data + int(dataLength), this->_data); // not sure why, but MVS doesn't support this on arrays
+	for (size_t i = 0; i < dataLength; ++i)
+		this->_data[i] = data[i];
+}
+#endif // DEBUG
+
+uint64_t BigCore::alignToMultipleOf8(uint64_t length)
+{
+	return length % 8 == 0 ? length : length + 8 - length % 8;
+}
+
+void BigCore::writeChunk(std::ofstream &file, uint64_t id, uint64_t length, const char* data)
+{
+	file.write((char*)&id, CHUNK_LENGTH);
+
+	uint64_t alignedLength = this->alignToMultipleOf8(length);
+	file.write((char*)&alignedLength, CHUNK_LENGTH);
+	file.write(data, length);
+
+	// pad with zeros to align length to multiple of 8
+	const char zero[] = { 0 };
+	for (uint64_t i = 0; i < length % 8; ++i)
+		file.write(zero, 1);
+}
+
+uint64_t BigCore::dataSize()
+{
+	uint64_t size = this->_imageWidth * this->_imageHeight * this->_numberOfImagePlanes * this->_numberOfImages * this->_numberOfTiles;
 
 	if (this->_dataType == CHAR || this->_dataType == UNSIGNED_CHAR || this->_dataType == BOOL)
 		return size;
@@ -38,13 +81,12 @@ unsigned int BigCore::dataSize()
 void BigCore::writeFile(std::string fname)
 {
 	// this is for easier writing of lengths into file
-	int length;
+	uint64_t length;
 
 	std::ofstream file(fname, std::ios_base::binary);
 	if (!file)
 	{
-		// do something when file couldn't be opened
-		return;
+		throw "Couldn't open file for writing";
 	}
 
 	// write header into file
@@ -74,40 +116,39 @@ void BigCore::writeFile(std::string fname)
 		file.write((char*)&this->_dataOrder[i], CHUNK_LENGTH);
 	
 	// write data types
-	// length = this->_dataType.size();
-	this->writeChunk(file, DATA_ORDER, CHUNK_LENGTH, (char*)&this->_dataType);
+	this->writeChunk(file, DATA_TYPE, CHUNK_LENGTH, (char*)&this->_dataType);
 
 	// write data -- length must be multiplied by data type -- half float is 2 bytes, double is 8 bytes etc...
-	this->writeChunk(file, DATA, this->dataSize, (char*)&this->_data);
+	this->writeChunk(file, DATA, this->dataSize(), this->_data);
 
 	file.close();
 }
 
 bool BigCore::checkHeader(char buffer[8])
 {
-	for (int i = 0; i < CHUNK_LENGTH; ++i)
+	for (uint64_t i = 0; i < CHUNK_LENGTH; ++i)
 		if (buffer[i] != MAGIC[i])
 			return false;
 	return true;
 }
 
-unsigned int BigCore::getFileLength(std::ifstream &file)
+uint64_t BigCore::getFileLength(std::ifstream &file)
 {
 	file.seekg(0, file.end);
-	unsigned int length = file.tellg();
+	uint64_t length = file.tellg();
 
 	// return to the beginning of the file!
 	file.seekg(0, file.beg);
 	return length;
 }
 
-void BigCore::readChunk(std::ifstream &file, unsigned int &id, unsigned int &length)
+void BigCore::readChunk(std::ifstream &file, uint64_t &id, uint64_t &length)
 {
 	file.read((char*)&id, CHUNK_LENGTH);
 	file.read((char*)&length, CHUNK_LENGTH);
 }
 
-void BigCore::readData(std::ifstream &file, const unsigned int id, const unsigned int length)
+void BigCore::readData(std::ifstream &file, const uint64_t id, const uint64_t length)
 {
 	if (id == NUMBER_OF_IMAGES)
 		file.read((char*)&this->_numberOfImages, length);
@@ -127,7 +168,15 @@ void BigCore::readData(std::ifstream &file, const unsigned int id, const unsigne
 	else if (id == DATA_TYPE)
 		file.read((char*)&this->_dataType, length);
 	else if (id == DATA)
-		file.read((char*)&this->_data, length);
+	{
+		if (this->_data)
+		{
+			delete[] this->_data;
+		}
+		this->_data = new char[length];
+		file.read(this->_data, length);
+		this->_dataLength = length;
+	}
 }
 
 void BigCore::readFile(std::string fname)
@@ -136,13 +185,12 @@ void BigCore::readFile(std::string fname)
 
 	if (!file)
 	{
-		// do something when file couldn't beopened
-		return;
+		throw "Couldn't open file for reading!";
 	}
 
 	char buffer[CHUNK_LENGTH];
 
-	unsigned int fileLength = this->getFileLength(file);
+	uint64_t fileLength = this->getFileLength(file);
 	if (fileLength > CHUNK_LENGTH)
 		file.read(buffer, CHUNK_LENGTH);
 	else
@@ -150,21 +198,25 @@ void BigCore::readFile(std::string fname)
 
 	if (!checkHeader(buffer))
 	{
-		// in case of wrong header do something -- what?
-		return;
+		throw "Given file format is not a BIG format!";
 	}
 
 	// we have read CHUNK_LENGTH
-	unsigned int loadedData = 8;
+	uint64_t loadedData = 8;
 
-	unsigned int fileLength = this->getFileLength(file);
-	unsigned int id, length;
+	uint64_t id = 0, length = 0;
 	while (loadedData < fileLength)
 	{
 		if (loadedData + 16 <= fileLength)
 		{
 			loadedData += 16;
 			this->readChunk(file, id, length);
+#ifdef DEBUG
+                        std::cout << "DEBUG: id: " << id << std::endl;
+                        std::cout << "DEBUG: length: " << length << std::endl;
+                        std::cout << "DEBUG: loaded data: " << loadedData << std::endl;
+#endif
+
 			if (loadedData + length <= fileLength)
 			{
 				loadedData += length;
@@ -174,4 +226,31 @@ void BigCore::readFile(std::string fname)
 		else
 			return;
 	}
+        // this->_dataLength = this->dataSize();
+
+	file.close();
+
+}
+
+void BigCore::print()
+{
+	std::cout << "images: " << this->_numberOfImages << std::endl;
+	std::cout << "tiles: " << this->_numberOfTiles << std::endl;
+	std::cout << "height: " << this->_imageHeight << std::endl;
+	std::cout << "width: " << this->_imageWidth << std::endl;
+	std::cout << "planes: " << this->_numberOfImagePlanes << std::endl;
+	std::cout << "data order ";
+	for (int i = 0; i < 5; ++i)
+		std::cout << this->_dataOrder[i] << std::endl;
+
+	std::cout << "data type: " << this->_dataType << std::endl;
+	std::cout << "data ";
+	for (uint64_t i = 0; i < this->_dataLength; ++i)
+		std::cout << int(this->_data[i]) << std::endl;
+}
+
+BigCore::~BigCore()
+{
+	if (this->_data)
+		delete[] this->_data;
 }

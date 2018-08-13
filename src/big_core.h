@@ -6,58 +6,44 @@
 #include <vector>
 #include <fstream>
 
-//using namespace std;
+#ifndef DEBUG
+#define DEBUG 1
+#endif
+
 
 class BigCore
 {
 public:
 	// allow only empty constructor
-	// BigCore();
+	BigCore();
 
-	void addTile(float *img);
-	void addTile(int *img);
-	// void addTile(Big *img);
-
-	// void *getTile(/*number, etc.*/, uint8_t &dataType);
+#ifdef DEBUG 
+	BigCore(uint64_t numberOfImages, uint64_t numberOfTiles, uint64_t imageHeight, uint64_t imageWidth,
+		    uint64_t numberOfPlanes, uint64_t dataOrder[5], uint64_t dataType, size_t dataLength, char* data);
+#ifdef DEBUG
 
 	// file de/serialization
 	void writeFile(std::string fname);
 	void readFile(std::string fname);
 
+	// static methods for file operations
 	static bool checkHeader(char buffer[8]);
-
-	// setters
-	void setNumberOfImages(unsigned numberOfImages);
-	void setNumberOfTiles(unsigned numberOfTiles);
-	void setImageHeight(unsigned imageHeight);
-	void setImageWidth(unsigned imageWidth);
-	void setNumberOfImagePlanes(unsigned numberOfImagePlanes);
-
-	void setDataOrder(uint64_t dataOrder[5]);
-	//void setDataType(unsigned dataType);
-	//void setData(void *data);
-
-	// getters
-	unsigned getNumberOfImages();
-	unsigned getNumberOfTiles();
-	unsigned getImageHeight();
-	unsigned getImageWidth();
-	unsigned getNumberOfImagePlanes();
-	std::vector<unsigned> getDataOrder();
-	unsigned getDataType();
-	//Array<T> getData();
+	static uint64_t alignToMultipleOf8(uint64_t length);
+	static uint64_t getFileLength(std::ifstream &file);
 
 	// destructor
 	~BigCore();
 
+	void print();
+
 protected:
-	void writeChunk(std::ofstream &file, unsigned int id, unsigned int length, const char* data);
+	void writeChunk(std::ofstream &file, uint64_t id, uint64_t length, const char* data);
 
-	void readChunk(std::ifstream &file, unsigned int &id, unsigned int &length);
-	void readData(std::ifstream &file, const unsigned int id, const unsigned int length);
+	void readChunk(std::ifstream &file, uint64_t &id, uint64_t &length);
+	void readData(std::ifstream &file, const uint64_t id, const uint64_t length);
 
-	unsigned int dataSize();
-	unsigned int getFileLength(std::ifstream &file);
+	uint64_t dataSize();
+	
 
 	uint64_t _numberOfImages;
 	uint64_t _numberOfTiles;
@@ -67,9 +53,10 @@ protected:
 	uint64_t _dataOrder[5];
 	// std::vector<uint8_t> _dataType;
 	uint64_t _dataType;
-	void *_data;
+	char *_data;
+	size_t _dataLength;
 
-	std::vector<void *> _entity;
+	// std::vector<void *> _entity;
 
 };
 
