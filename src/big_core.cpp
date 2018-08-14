@@ -3,7 +3,6 @@
 #include <fstream>
 
 #include "big_core.h"
-#include "big_consts.h"
 
 BigCore::BigCore()
 	:
@@ -37,7 +36,7 @@ _dataLength(dataLength)
 	for (size_t i = 0; i < dataLength; ++i)
 		this->_data[i] = data[i];
 }
-#endif // DEBUG
+#endif
 
 uint64_t BigCore::alignToMultipleOf8(uint64_t length)
 {
@@ -62,16 +61,16 @@ uint64_t BigCore::dataSize()
 {
 	uint64_t size = this->_imageWidth * this->_imageHeight * this->_numberOfImagePlanes * this->_numberOfImages * this->_numberOfTiles;
 
-	if (this->_dataType == CHAR || this->_dataType == UNSIGNED_CHAR || this->_dataType == BOOL)
+	if (this->_dataType == uint64_t(DataTypes::CHAR) || this->_dataType == uint64_t(DataTypes::UNSIGNED_CHAR) || this->_dataType == uint64_t(DataTypes::BOOL))
 		return size;
 
-	if (this->_dataType == SHORT || this->_dataType == UNSIGNED_SHORT)
+	if (this->_dataType == uint64_t(DataTypes::SHORT) || this->_dataType == uint64_t(DataTypes::UNSIGNED_SHORT))
 		return size * 2;
 
-	if (this->_dataType == FLOAT || this->_dataType == INT || this->_dataType == UNSIGNED_INT)
+	if (this->_dataType == uint64_t(DataTypes::FLOAT) || this->_dataType == uint64_t(DataTypes::INT) || this->_dataType == uint64_t(DataTypes::UNSIGNED_INT))
 		return size * 4;
 
-	if (this->_dataType == DOUBLE || this->_dataType == LONG_LONG || this->_dataType == UNSIGNED_LONG_LONG)
+	if (this->_dataType == uint64_t(DataTypes::DOUBLE) || this->_dataType == uint64_t(DataTypes::LONG_LONG) || this->_dataType == uint64_t(DataTypes::UNSIGNED_LONG_LONG))
 		return size * 8;
 
 	// if neither, do not write data
@@ -93,33 +92,35 @@ void BigCore::writeFile(std::string fname)
 	file.write(MAGIC, 8);
 
 	// write number of images
-	this->writeChunk(file, NUMBER_OF_IMAGES, CHUNK_LENGTH, (char*)&this->_numberOfImages);
+	this->writeChunk(file, uint64_t(ChunkIds::NUMBER_OF_IMAGES), CHUNK_LENGTH, (char*)&this->_numberOfImages);
 
 	// write number of tiles
-	this->writeChunk(file, NUMBER_OF_TILES, CHUNK_LENGTH, (char*)&this->_numberOfTiles);
+	this->writeChunk(file, uint64_t(ChunkIds::NUMBER_OF_TILES), CHUNK_LENGTH, (char*)&this->_numberOfTiles);
 
 	// write image width
-	this->writeChunk(file, IMAGE_WIDTH, CHUNK_LENGTH, (char*)&this->_imageWidth);
+	this->writeChunk(file, uint64_t(ChunkIds::IMAGE_WIDTH), CHUNK_LENGTH, (char*)&this->_imageWidth);
 
 	// write image height
-	this->writeChunk(file, IMAGE_HEIGHT, CHUNK_LENGTH, (char*)&this->_imageHeight);
+	this->writeChunk(file, uint64_t(ChunkIds::IMAGE_HEIGHT), CHUNK_LENGTH, (char*)&this->_imageHeight);
 
 	// write number of image planes
-	this->writeChunk(file, NUMBER_OF_IMAGE_PLANES, CHUNK_LENGTH, (char*)&this->_numberOfImagePlanes);
+	this->writeChunk(file, uint64_t(ChunkIds::NUMBER_OF_IMAGE_PLANES), CHUNK_LENGTH, (char*)&this->_numberOfImagePlanes);
 
 	// write data order -- arrays must be handled differently
 	length = CHUNK_LENGTH * 5;
 
-	file.write((char*)&DATA_ORDER, CHUNK_LENGTH);
+	uint64_t dataOrder = uint64_t(ChunkIds::DATA_ORDER);
+	file.write((char*)&dataOrder, CHUNK_LENGTH);
 	file.write((char*)&length, CHUNK_LENGTH);
 	for (int i = 0; i < 5; ++i)
 		file.write((char*)&this->_dataOrder[i], CHUNK_LENGTH);
 	
 	// write data types
-	this->writeChunk(file, DATA_TYPE, CHUNK_LENGTH, (char*)&this->_dataType);
+	// length = this->_dataType.size();
+	this->writeChunk(file, uint64_t(ChunkIds::DATA_TYPE), CHUNK_LENGTH, (char*)&this->_dataType);
 
 	// write data -- length must be multiplied by data type -- half float is 2 bytes, double is 8 bytes etc...
-	this->writeChunk(file, DATA, this->dataSize(), this->_data);
+	this->writeChunk(file, uint64_t(ChunkIds::DATA), this->dataSize(), this->_data);
 
 	file.close();
 }
@@ -150,24 +151,24 @@ void BigCore::readChunk(std::ifstream &file, uint64_t &id, uint64_t &length)
 
 void BigCore::readData(std::ifstream &file, const uint64_t id, const uint64_t length)
 {
-	if (id == NUMBER_OF_IMAGES)
+	if (id == uint64_t(ChunkIds::NUMBER_OF_IMAGES))
 		file.read((char*)&this->_numberOfImages, length);
-	else if (id == NUMBER_OF_TILES)
+	else if (id == uint64_t(ChunkIds::NUMBER_OF_TILES))
 		file.read((char*)&this->_numberOfTiles, length);
-	else if (id == IMAGE_WIDTH)
+	else if (id == uint64_t(ChunkIds::IMAGE_WIDTH))
 		file.read((char*)&this->_imageWidth, length);
-	else if (id == IMAGE_HEIGHT)
+	else if (id == uint64_t(ChunkIds::IMAGE_HEIGHT))
 		file.read((char*)&this->_imageHeight, length);
-	else if (id == NUMBER_OF_IMAGE_PLANES)
+	else if (id == uint64_t(ChunkIds::NUMBER_OF_IMAGE_PLANES))
 		file.read((char*)&this->_numberOfImagePlanes, length);
-	else if (id == DATA_ORDER)
+	else if (id == uint64_t(ChunkIds::DATA_ORDER))
 	{
 		for (int i = 0; i < 5; ++i)
 			file.read((char*)&this->_dataOrder[i], CHUNK_LENGTH);
 	}
-	else if (id == DATA_TYPE)
+	else if (id == uint64_t(ChunkIds::DATA_TYPE))
 		file.read((char*)&this->_dataType, length);
-	else if (id == DATA)
+	else if (id == uint64_t(ChunkIds::DATA))
 	{
 		if (this->_data)
 		{
