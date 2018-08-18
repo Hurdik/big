@@ -79,7 +79,7 @@ public:
 	void print();
 
 protected:
-	void writeChunk(std::ofstream &file, uint64_t id, uint64_t length, const char* data);
+	void writeChunk(std::ofstream &file, ChunkIds id, uint64_t length, const char* data);
 
 	void readChunk(std::ifstream &file, uint64_t &id, uint64_t &length);
 	void readData(std::ifstream &file, const uint64_t id, const uint64_t length);
@@ -96,7 +96,7 @@ protected:
 	// std::vector<uint8_t> _dataType;
 	uint64_t _dataType;
 	char *_data;
-	size_t _dataLength;
+	uint64_t _dataLength;
 
 	// std::vector<void *> _entity;
 
